@@ -156,6 +156,9 @@ if st.button("Explore Cuisine & Generate Menu with LangChain", type="primary"):
     if not effective_api_key:
         st.warning("WARNING: Please provide an AI API Key in the sidebar or set AI_API_KEY in .env")
     else:
+        st.session_state["pipeline_output"] = None
+        st.session_state["pipeline_error"] = None
+        
         with st.status(f"Running LangChain Sequential Pipeline for {country}...", expanded=True) as status_box:
             try:
                 llm = get_llm_instance(ai_provider, ai_model, effective_api_key)
@@ -223,16 +226,30 @@ Key Ingredients: <List of proper ingredients>
                 
                 status_box.update(label=f"Pipeline Completed Successfully for {country}!", state="complete", expanded=False)
                 
-                # --- Render Outputs ---
-                st.markdown('<div class="chain-badge">Chain 1 Output: Restaurant Concept & Suited City/Ambiance</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="restaurant-card">{restaurant_out.replace("\n", "<br/>")}</div>', unsafe_allow_html=True)
-                
-                st.markdown('<div class="chain-badge">Chain 2 Output: Recommended Menu (4 Dishes with Dietary Types)</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="dish-card">{dishes_out.replace("\n", "<br/>")}</div>', unsafe_allow_html=True)
-                
-                st.success("LangChain Sequential Execution Completed Successfully!")
+                # Save to session_state for persistent rendering
+                st.session_state["pipeline_output"] = {
+                    "country": country,
+                    "restaurant_out": restaurant_out,
+                    "dishes_out": dishes_out
+                }
                 
             except Exception as e:
                 status_box.update(label="Pipeline Execution Failed!", state="error", expanded=True)
+                st.session_state["pipeline_error"] = str(e)
                 st.error(f"LangChain Execution Error: {str(e)}")
                 st.info("Check if your AI_API_KEY is valid for the selected provider.")
+
+# Persistent Display of Results
+if st.session_state.get("pipeline_output"):
+    out_data = st.session_state["pipeline_output"]
+    st.markdown("---")
+    
+    # Separate Result Card 1: Chain 1 Output
+    st.markdown('<div class="chain-badge">Chain 1 Output: Restaurant Concept & Suited City/Ambiance</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="restaurant-card">{out_data["restaurant_out"].replace("\n", "<br/>")}</div>', unsafe_allow_html=True)
+    
+    # Separate Result Card 2: Chain 2 Output
+    st.markdown('<div class="chain-badge">Chain 2 Output: Recommended Menu (4 Dishes with Dietary Types)</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="dish-card">{out_data["dishes_out"].replace("\n", "<br/>")}</div>', unsafe_allow_html=True)
+    
+    st.success("LangChain Sequential Execution Completed Successfully!")

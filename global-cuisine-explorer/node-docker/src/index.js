@@ -204,10 +204,7 @@ run(
         return;
       }
 
-      br.write({ body: `---` });
-      br.write({
-        body: `**Running LangChain Sequential Pipeline for ${country}...**`,
-      });
+      br.setValue('pipeline_running', true);
 
       try {
         const llm = createLLMInstance(aiProvider, aiModel, effectiveKey);
@@ -226,10 +223,8 @@ Cuisine Specialty & Theme: <Specialty & Culinary Focus>
 Target Audience: <Target Customer Base>`
         );
 
-        br.write({ body: `**Step 1/2**: Executing Chain 1 (Restaurant Concept, Suited City & Ambiance)...` });
         const chain1 = restaurantPrompt.pipe(llm).pipe(parser);
         const restaurantResult = await chain1.invoke({ country });
-        br.write({ body: `**Step 1 Completed**: Restaurant Concept & Suited City Generated!` });
 
         // Chain 2 Prompts & Execution
         const dishPrompt = PromptTemplate.fromTemplate(
@@ -267,24 +262,49 @@ Description: <2-3 sentences description>
 Key Ingredients: <List of proper ingredients>`
         );
 
-        br.write({ body: `**Step 2/2**: Executing Chain 2 (Curating 4 Dishes with Dietary Types)...` });
         const chain2 = dishPrompt.pipe(llm).pipe(parser);
         const dishesResult = await chain2.invoke({
           country,
           restaurant_info: restaurantResult,
         });
-        br.write({ body: `**Step 2 Completed**: 4 Menu Dishes Curated Successfully!` });
 
-        // Output Display
+        br.setValue('pipeline_result', {
+          country,
+          restaurantResult,
+          dishesResult,
+          error: null,
+        });
+      } catch (err) {
+        br.setValue('pipeline_result', {
+          country,
+          restaurantResult: null,
+          dishesResult: null,
+          error: err.message || String(err),
+        });
+      } finally {
+        br.setValue('pipeline_running', false);
+      }
+    }
+
+    // Persistently display result on screen
+    const currentResult = br.getOrDefault('pipeline_result', null);
+    const isRunning = br.getOrDefault('pipeline_running', false);
+
+    if (isRunning) {
+      br.write({ body: `---` });
+      br.write({ body: `**Running LangChain Sequential Pipeline for ${country}...**` });
+    } else if (currentResult) {
+      br.write({ body: `---` });
+      if (currentResult.error) {
+        br.write({ body: `**EXECUTION ERROR:** ${currentResult.error}` });
+      } else {
         br.write({ body: `### Chain 1 Output: Restaurant Concept & Suited City/Ambiance` });
-        br.write({ body: `\`\`\`text\n${restaurantResult}\n\`\`\`` });
+        br.write({ body: `\`\`\`text\n${currentResult.restaurantResult}\n\`\`\`` });
 
         br.write({ body: `### Chain 2 Output: Recommended Menu (4 Dishes with Dietary Types)` });
-        br.write({ body: `\`\`\`text\n${dishesResult}\n\`\`\`` });
+        br.write({ body: `\`\`\`text\n${currentResult.dishesResult}\n\`\`\`` });
 
         br.write({ body: `**SUCCESS:** LangChain Sequential Execution Completed Successfully!` });
-      } catch (err) {
-        br.write({ body: `**EXECUTION ERROR:** ${err.message || String(err)}` });
       }
     }
   },
