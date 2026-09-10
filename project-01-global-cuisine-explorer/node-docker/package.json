@@ -1,0 +1,13 @@
+{
+  "name": "global-cuisine-explorer-node",
+  "version": "1.0.0",
+  "description": "Global Cuisine & Restaurant Explorer - Node.js & Docker Variant",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
