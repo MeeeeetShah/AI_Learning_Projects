@@ -1,197 +1,296 @@
-const express = require('express');
-const app = express();
+const path = require('path');
+const dotenv = require('dotenv');
 
-const PORT = process.env.PORT || 7860;
+// 1. Load local subfolder .env
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-const cuisineData = {
-  "Italy": {
-    flag: "🇮🇹",
-    capital: "Rome",
-    restaurant: {
-      name: "Osteria Francescana",
-      city: "Modena",
-      rating: "⭐⭐⭐⭐⭐ (3 Michelin Stars)",
-      specialty: "Modern Italian Gastronomy",
-      ambiance: "Intimate & Art-infused"
-    },
-    dishes: [
-      {
-        name: "Neapolitan Pizza Margherita",
-        type: "Main Course",
-        ingredients: ["San Marzano Tomatoes", "Fresh Mozzarella di Bufala", "Fresh Basil", "Olive Oil"],
-        description: "The classic Italian pizza featuring a chewy blistered crust, sweet tomato sauce, and creamy mozzarella."
-      },
-      {
-        name: "Tagliatelle al Ragù alla Bolognese",
-        type: "Pasta",
-        ingredients: ["Fresh Egg Tagliatelle", "Slow-cooked Beef & Pork", "Pancetta", "Parmigiano"],
-        description: "Silky homemade egg pasta ribbons tossed in a rich, slow-simmered meat sauce."
-      }
-    ]
-  },
-  "India": {
-    flag: "🇮🇳",
-    capital: "New Delhi",
-    restaurant: {
-      name: "Bukhara",
-      city: "New Delhi",
-      rating: "⭐⭐⭐⭐⭐ (Iconic North Indian Dining)",
-      specialty: "Tandoori & Slow-Cooked Dal",
-      ambiance: "Rustic Clay Oven Experience"
-    },
-    dishes: [
-      {
-        name: "Butter Chicken (Murgh Makhani)",
-        type: "Curry / Main",
-        ingredients: ["Tandoori Chicken", "Tomato Gravy", "Butter & Cream", "Kasuri Methi"],
-        description: "Tender charcoal-grilled chicken simmered in a rich tomato and butter sauce."
-      },
-      {
-        name: "Dal Bukhara / Makhani",
-        type: "Lentil Specialty",
-        ingredients: ["Black Lentils", "Garlic & Ginger", "Slow-simmered 18 hours", "Fresh Cream"],
-        description: "Whole black lentils slow-cooked overnight over charcoal, creating a creamy texture."
-      }
-    ]
-  },
-  "Japan": {
-    flag: "🇯🇵",
-    capital: "Tokyo",
-    restaurant: {
-      name: "Sukiyabashi Jiro",
-      city: "Tokyo",
-      rating: "⭐⭐⭐⭐⭐ (World Famous Edomae Sushi)",
-      specialty: "Omakase Nigiri Sushi",
-      ambiance: "Minimalist Master Craftsmanship"
-    },
-    dishes: [
-      {
-        name: "Otoro Nigiri (Fatty Tuna Sushi)",
-        type: "Seafood / Nigiri",
-        ingredients: ["Bluefin Tuna Belly", "Vinegared Shari Rice", "Real Wasabi", "House Shoyu"],
-        description: "Melt-in-your-mouth premium tuna belly served over warm sushi rice."
-      },
-      {
-        name: "Tonkotsu Ramen",
-        type: "Noodle Soup",
-        ingredients: ["Pork Bone Broth", "Ramen Noodles", "Chashu Pork Belly", "Ajitsuke Tamago"],
-        description: "Deeply savory, milky pork broth paired with springy noodles and soft-boiled egg."
-      }
-    ]
-  },
-  "Mexico": {
-    flag: "🇲🇽",
-    capital: "Mexico City",
-    restaurant: {
-      name: "Pujol",
-      city: "Mexico City",
-      rating: "⭐⭐⭐⭐⭐ (Top 10 World's Best)",
-      specialty: "Elevated Traditional Mexican",
-      ambiance: "Modern & Earthy"
-    },
-    dishes: [
-      {
-        name: "Tacos al Pastor",
-        type: "Street Food / Main",
-        ingredients: ["Marinated Pork", "Achiote & Spices", "Roasted Pineapple", "Corn Tortilla"],
-        description: "Thinly sliced spit-roasted pork marinated in achiote and chiles with sweet pineapple."
-      },
-      {
-        name: "Mole Madre",
-        type: "Traditional Sauce",
-        ingredients: ["100+ Ingredients", "Mexican Chocolate", "Mulato Chiles", "Nuts & Seeds"],
-        description: "A complex Mexican sauce aged for hundreds of days to develop rich chocolate and chili notes."
-      }
-    ]
+// 2. Load root monorepo .env (fallback if key not found locally)
+dotenv.config({ path: path.resolve(__dirname, '../../../.env'), override: false });
+dotenv.config({ path: path.resolve(process.cwd(), '../../.env'), override: false });
+
+const { run } = require('@backroad/backroad');
+const { PromptTemplate } = require('@langchain/core/prompts');
+const { StringOutputParser } = require('@langchain/core/output_parsers');
+
+/**
+ * Factory function to instantiate the LLM based on provider configuration.
+ */
+function createLLMInstance(provider, modelName, apiKey) {
+  const normProvider = (provider || 'google').toLowerCase();
+
+  if (normProvider === 'groq') {
+    try {
+      const { ChatGroq } = require('@langchain/groq');
+      return new ChatGroq({
+        model: modelName || 'llama-3.1-70b-versatile',
+        apiKey,
+        temperature: 0.7,
+      });
+    } catch (e) {
+      const { ChatOpenAI } = require('@langchain/openai');
+      return new ChatOpenAI({
+        modelName: modelName || 'llama-3.1-70b-versatile',
+        openAIApiKey: apiKey,
+        configuration: {
+          baseURL: 'https://api.groq.com/openai/v1',
+        },
+        temperature: 0.7,
+      });
+    }
+  } else if (normProvider === 'openai') {
+    const { ChatOpenAI } = require('@langchain/openai');
+    return new ChatOpenAI({
+      modelName: modelName || 'gpt-4o-mini',
+      openAIApiKey: apiKey,
+      temperature: 0.7,
+    });
+  } else {
+    const { ChatGoogleGenerativeAI } = require('@langchain/google-genai');
+    return new ChatGoogleGenerativeAI({
+      modelName: modelName || 'gemini-2.5-flash',
+      apiKey,
+      temperature: 0.7,
+    });
   }
-};
+}
 
-app.use(express.json());
+/**
+ * Executes a 2-step Sequential Chain using LangChain:
+ * Chain 1: Country -> Restaurant Concept, Suited City & Ambiance
+ * Chain 2: Restaurant Concept -> 4 Recommended Dishes (Vegan/Veg/Non-Veg/Eggitarian)
+ */
+async function runLangChainSequentialPipeline(country, apiKey, provider, modelName) {
+  const llm = createLLMInstance(provider, modelName, apiKey);
 
-// API Endpoint
-app.get('/api/cuisine', (req, res) => {
-  res.json(cuisineData);
-});
+  // Chain 1: Recommend Restaurant Concept, Suited City & Ambiance
+  const restaurantPrompt = PromptTemplate.fromTemplate(
+    `You are an expert culinary concept strategist and restaurateur.
+Given the country "{country}", generate a unique or iconic restaurant concept suited for this country.
 
-// Interactive HTML Frontend
-app.get('/', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Global Cuisine Explorer (Node.js + Docker)</title>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-      <style>
-        * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
-        body { background: #0f0f17; color: #e2e8f0; margin: 0; padding: 2rem; }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.2rem; margin-bottom: 0.5rem; }
-        .subtitle { color: #94a3b8; margin-bottom: 2rem; }
-        select { background: #1e1e2e; color: #fff; border: 1px solid #334155; padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 1rem; width: 100%; margin-bottom: 2rem; outline: none; }
-        .card { background: #181825; border-radius: 12px; padding: 1.5rem; border: 1px solid #27273a; margin-bottom: 1.5rem; }
-        .restaurant { border-left: 4px solid #818cf8; }
-        .dishes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .tag { background: #2a2a40; color: #38bdf8; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; margin-right: 4px; display: inline-block; margin-top: 4px; }
-        .badge { background: #312e81; color: #c7d2fe; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>🐳 Global Cuisine Explorer</h1>
-        <div class="subtitle">Node.js + Docker Containerized App (Listening on Port ${PORT})</div>
-        
-        <label for="countrySelect"><b>Select Country:</b></label>
-        <select id="countrySelect" onchange="renderCuisine()">
-          ${Object.keys(cuisineData).map(country => `<option value="${country}">${cuisineData[country].flag} ${country}</option>`).join('')}
-        </select>
+Provide your response strictly in the following format:
+Restaurant Name: <Name of the Restaurant>
+Best Suited City: <Best Suited City in {country}>
+Ideal Ambiance & Vibe: <Detailed Ambiance & Atmosphere Description>
+Cuisine Specialty & Theme: <Specialty & Culinary Focus>
+Target Audience: <Target Customer Base>`
+  );
 
-        <div id="content"></div>
-      </div>
+  // Chain 2: Recommend 4 Dishes with Dietary Types based on Chain 1 output
+  const dishPrompt = PromptTemplate.fromTemplate(
+    `You are a world-class executive chef. Based on this restaurant concept in {country}:
 
-      <script>
-        const data = ${JSON.stringify(cuisineData)};
+{restaurant_info}
 
-        function renderCuisine() {
-          const selected = document.getElementById('countrySelect').value;
-          const country = data[selected];
-          const content = document.getElementById('content');
+Curate 4 recommended dishes (Starter, Main Course, Dessert, Beverage) that should be added to this restaurant's menu.
+Ensure you include dietary tags (Vegan, Vegetarian, Non-Vegetarian, or Eggitarian) for each dish.
 
-          content.innerHTML = \`
-            <div class="card restaurant">
-              <h2>📍 Top Restaurant: \${country.restaurant.name} (\${country.restaurant.city})</h2>
-              <p><b>Rating:</b> \${country.restaurant.rating}</p>
-              <p><b>Specialty:</b> \${country.restaurant.specialty}</p>
-              <p><b>Ambiance:</b> \${country.restaurant.ambiance}</p>
-            </div>
+Provide your response strictly in the following format:
 
-            <h3>🍲 Popular Iconic Dishes (Menu Highlights)</h3>
-            <div class="dishes-grid">
-              \${country.dishes.map((dish, i) => \`
-                <div class="card">
-                  <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h4 style="margin:0; color:#38bdf8;">Dish #\${i+1}: \${dish.name}</h4>
-                    <span class="badge">\${dish.type}</span>
-                  </div>
-                  <p style="color:#cbd5e1; font-size:0.95rem;">\${dish.description}</p>
-                  <div>
-                    <small><b>Ingredients:</b></small><br/>
-                    \${dish.ingredients.map(ing => \`<span class="tag">\${ing}</span>\`).join('')}
-                  </div>
-                </div>
-              \`).join('')}
-            </div>
-          \`;
-        }
+Dish 1: <Dish Name>
+Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
+Category: <Starter / Main Course / Dessert / Beverage>
+Description: <2-3 sentences description>
+Key Ingredients: <List of proper ingredients>
 
-        renderCuisine();
-      </script>
-    </body>
-    </html>
-  `);
-});
+Dish 2: <Dish Name>
+Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
+Category: <Starter / Main Course / Dessert / Beverage>
+Description: <2-3 sentences description>
+Key Ingredients: <List of proper ingredients>
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+Dish 3: <Dish Name>
+Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
+Category: <Starter / Main Course / Dessert / Beverage>
+Description: <2-3 sentences description>
+Key Ingredients: <List of proper ingredients>
+
+Dish 4: <Dish Name>
+Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
+Category: <Starter / Main Course / Dessert / Beverage>
+Description: <2-3 sentences description>
+Key Ingredients: <List of proper ingredients>`
+  );
+
+  const parser = new StringOutputParser();
+
+  // Execute Chain 1
+  const chain1 = restaurantPrompt.pipe(llm).pipe(parser);
+  const restaurantResult = await chain1.invoke({ country });
+
+  // Execute Chain 2 with Chain 1 output
+  const chain2 = dishPrompt.pipe(llm).pipe(parser);
+  const dishesResult = await chain2.invoke({
+    country,
+    restaurant_info: restaurantResult,
+  });
+
+  return { restaurantResult, dishesResult };
+}
+
+// Backroad Server-Driven UI (Node.js equivalent to Streamlit)
+run(
+  async (br) => {
+    // Environment Resolution Flow: Local .env -> Monorepo Root .env
+    const envApiKey = process.env.AI_API_KEY || process.env.GOOGLE_API_KEY || '';
+    const aiModel = process.env.AI_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const aiProvider = process.env.AI_PROVIDER || 'google';
+
+    br.write({ body: '# LangChain JS Cuisine Explorer' });
+    br.write({
+      body: `*Powered by Node.js, Backroad UI Framework & Multi-LLM Architecture (Provider: \`${aiProvider.toUpperCase()}\`, Model: \`${aiModel}\`)*`,
+    });
+
+    // Key Status Indicator
+    if (envApiKey) {
+      br.write({
+        body: `> **SECURE:** AI API Key loaded from environment (.env). Key is active and masked.`,
+      });
+    } else {
+      br.write({
+        body: `> **WARNING:** No AI API Key found in local or root .env environment. Please provide key below.`,
+      });
+    }
+
+    // User Inputs: Country Dropdown & Optional Custom Input
+    const countryOptions = [
+      { label: "Italy", value: "Italy" },
+      { label: "India", value: "India" },
+      { label: "Japan", value: "Japan" },
+      { label: "Mexico", value: "Mexico" },
+      { label: "France", value: "France" },
+      { label: "Thailand", value: "Thailand" },
+      { label: "Spain", value: "Spain" },
+      { label: "Greece", value: "Greece" },
+      { label: "Custom", value: "Custom" },
+    ];
+    const selectedCountryOption = br.select({
+      label: 'Select a Country',
+      options: countryOptions,
+      defaultValue: 'Japan',
+    });
+
+    let country = selectedCountryOption;
+    if (selectedCountryOption === 'Custom') {
+      country = br.textInput({
+        label: 'Enter Custom Country Name',
+        defaultValue: 'Brazil',
+      });
+    }
+
+    // Process Guidance Box based on Selected Country
+    br.write({
+      body: `> **Target Country**: \`${country}\`\n>\n> **Execution Plan**:\n> 1. **Chain 1**: Predicts/Generates an iconic restaurant concept for **${country}**, identifying the best suited city & ideal ambiance/vibe.\n> 2. **Chain 2**: Curates 4 tailored menu dishes (Starter, Main Course, Dessert, Beverage) with explicit dietary tags (\`Vegan\`, \`Vegetarian\`, \`Non-Vegetarian\`, \`Eggitarian\`) & proper key ingredients.`,
+    });
+
+    const overrideKey = br.textInput({
+      label: envApiKey ? 'Override AI API Key (Optional)' : 'Enter AI API Key',
+      type: 'password',
+    });
+
+    const effectiveKey = (overrideKey && overrideKey.trim()) ? overrideKey.trim() : envApiKey;
+
+    const isClicked = br.button({ label: 'Explore Cuisine & Generate Menu with LangChain' });
+
+    if (isClicked) {
+      if (!effectiveKey) {
+        br.write({
+          body: `**ERROR:** Please provide an AI API Key or configure \`AI_API_KEY\` in your \`.env\` file.`,
+        });
+        return;
+      }
+
+      if (!country) {
+        br.write({ body: `**ERROR:** Please enter a country name.` });
+        return;
+      }
+
+      br.write({ body: `---` });
+      br.write({
+        body: `**Running LangChain Sequential Pipeline for ${country}...**`,
+      });
+
+      try {
+        const llm = createLLMInstance(aiProvider, aiModel, effectiveKey);
+        const parser = new StringOutputParser();
+
+        // Chain 1 Prompts & Execution
+        const restaurantPrompt = PromptTemplate.fromTemplate(
+          `You are an expert culinary concept strategist and restaurateur.
+Given the country "{country}", generate a unique or iconic restaurant concept suited for this country.
+
+Provide your response strictly in the following format:
+Restaurant Name: <Name of the Restaurant>
+Best Suited City: <Best Suited City in {country}>
+Ideal Ambiance & Vibe: <Detailed Ambiance & Atmosphere Description>
+Cuisine Specialty & Theme: <Specialty & Culinary Focus>
+Target Audience: <Target Customer Base>`
+        );
+
+        br.write({ body: `**Step 1/2**: Executing Chain 1 (Restaurant Concept, Suited City & Ambiance)...` });
+        const chain1 = restaurantPrompt.pipe(llm).pipe(parser);
+        const restaurantResult = await chain1.invoke({ country });
+        br.write({ body: `**Step 1 Completed**: Restaurant Concept & Suited City Generated!` });
+
+        // Chain 2 Prompts & Execution
+        const dishPrompt = PromptTemplate.fromTemplate(
+          `You are a world-class executive chef. Based on this restaurant concept in {country}:
+
+{restaurant_info}
+
+Curate 4 recommended dishes (Starter, Main Course, Dessert, Beverage) that should be added to this restaurant's menu.
+Ensure you include dietary tags (Vegan, Vegetarian, Non-Vegetarian, or Eggitarian) for each dish.
+
+Provide your response strictly in the following format:
+
+Dish 1: <Dish Name>
+Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
+Category: <Starter / Main Course / Dessert / Beverage>
+Description: <2-3 sentences description>
+Key Ingredients: <List of proper ingredients>
+
+Dish 2: <Dish Name>
+Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
+Category: <Starter / Main Course / Dessert / Beverage>
+Description: <2-3 sentences description>
+Key Ingredients: <List of proper ingredients>
+
+Dish 3: <Dish Name>
+Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
+Category: <Starter / Main Course / Dessert / Beverage>
+Description: <2-3 sentences description>
+Key Ingredients: <List of proper ingredients>
+
+Dish 4: <Dish Name>
+Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
+Category: <Starter / Main Course / Dessert / Beverage>
+Description: <2-3 sentences description>
+Key Ingredients: <List of proper ingredients>`
+        );
+
+        br.write({ body: `**Step 2/2**: Executing Chain 2 (Curating 4 Dishes with Dietary Types)...` });
+        const chain2 = dishPrompt.pipe(llm).pipe(parser);
+        const dishesResult = await chain2.invoke({
+          country,
+          restaurant_info: restaurantResult,
+        });
+        br.write({ body: `**Step 2 Completed**: 4 Menu Dishes Curated Successfully!` });
+
+        // Output Display
+        br.write({ body: `### Chain 1 Output: Restaurant Concept & Suited City/Ambiance` });
+        br.write({ body: `\`\`\`text\n${restaurantResult}\n\`\`\`` });
+
+        br.write({ body: `### Chain 2 Output: Recommended Menu (4 Dishes with Dietary Types)` });
+        br.write({ body: `\`\`\`text\n${dishesResult}\n\`\`\`` });
+
+        br.write({ body: `**SUCCESS:** LangChain Sequential Execution Completed Successfully!` });
+      } catch (err) {
+        br.write({ body: `**EXECUTION ERROR:** ${err.message || String(err)}` });
+      }
+    }
+  },
+  {
+    server: {
+      port: process.env.PORT ? parseInt(process.env.PORT, 10) : 7860,
+    },
+  }
+);

@@ -1,13 +1,22 @@
 {
   "name": "global-cuisine-explorer-node",
   "version": "1.0.0",
-  "description": "Global Cuisine & Restaurant Explorer - Node.js & Docker Variant",
+  "description": "Global Cuisine & Restaurant Explorer with LangChain JS & Google Gemini",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "docker:build": "docker build -t global-cuisine-explorer-node .",
+    "docker:run": "docker run -p 7860:7860 --env-file .env global-cuisine-explorer-node",
+    "docker:up": "docker compose up --build"
   },
   "dependencies": {
+    "@backroad/backroad": "^1.20.2",
+    "@langchain/core": "^0.2.0",
+    "@langchain/google-genai": "^0.0.21",
+    "@langchain/groq": "^0.0.15",
+    "@langchain/openai": "^0.2.0",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2"
   }
 }
