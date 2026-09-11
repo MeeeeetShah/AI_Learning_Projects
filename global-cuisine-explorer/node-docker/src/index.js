@@ -12,27 +12,42 @@ const { run } = require('@backroad/backroad');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
 
+const {
+  COUNTRY_OPTIONS,
+  CUSTOM_COUNTRY_OPTION,
+  DEFAULT_COUNTRY,
+  DEFAULT_CUSTOM_COUNTRY,
+  DEFAULT_AI_PROVIDER,
+  DEFAULT_AI_MODEL,
+  DEFAULT_GROQ_MODEL,
+  DEFAULT_OPENAI_MODEL,
+  GROQ_BASE_URL,
+  DEFAULT_SERVER_PORT,
+  RESTAURANT_PROMPT_TEMPLATE,
+  DISH_PROMPT_TEMPLATE,
+} = require('../constants/cuisine_constants');
+
 /**
  * Factory function to instantiate the LLM based on provider configuration.
  */
 function createLLMInstance(provider, modelName, apiKey) {
-  const normProvider = (provider || 'google').toLowerCase();
+  const normProvider = (provider || DEFAULT_AI_PROVIDER).toLowerCase();
 
   if (normProvider === 'groq') {
     try {
       const { ChatGroq } = require('@langchain/groq');
       return new ChatGroq({
-        model: modelName || 'llama-3.1-70b-versatile',
+        model: modelName || DEFAULT_GROQ_MODEL,
         apiKey,
         temperature: 0.7,
       });
     } catch (e) {
       const { ChatOpenAI } = require('@langchain/openai');
       return new ChatOpenAI({
-        modelName: modelName || 'llama-3.1-70b-versatile',
+        modelName: modelName || DEFAULT_GROQ_MODEL,
         openAIApiKey: apiKey,
         configuration: {
-          baseURL: 'https://api.groq.com/openai/v1',
+          baseURL: GROQ_BASE_URL,
         },
         temperature: 0.7,
       });
@@ -40,100 +55,28 @@ function createLLMInstance(provider, modelName, apiKey) {
   } else if (normProvider === 'openai') {
     const { ChatOpenAI } = require('@langchain/openai');
     return new ChatOpenAI({
-      modelName: modelName || 'gpt-4o-mini',
+      modelName: modelName || DEFAULT_OPENAI_MODEL,
       openAIApiKey: apiKey,
       temperature: 0.7,
     });
   } else {
     const { ChatGoogleGenerativeAI } = require('@langchain/google-genai');
     return new ChatGoogleGenerativeAI({
-      modelName: modelName || 'gemini-2.5-flash',
+      modelName: modelName || DEFAULT_AI_MODEL,
       apiKey,
       temperature: 0.7,
     });
   }
 }
 
-/**
- * Executes a 2-step Sequential Chain using LangChain:
- * Chain 1: Country -> Restaurant Concept, Suited City & Ambiance
- * Chain 2: Restaurant Concept -> 4 Recommended Dishes (Vegan/Veg/Non-Veg/Eggitarian)
- */
-async function runLangChainSequentialPipeline(country, apiKey, provider, modelName) {
-  const llm = createLLMInstance(provider, modelName, apiKey);
-
-  // Chain 1: Recommend Restaurant Concept, Suited City & Ambiance
-  const restaurantPrompt = PromptTemplate.fromTemplate(
-    `You are an expert culinary concept strategist and restaurateur.
-Given the country "{country}", generate a unique or iconic restaurant concept suited for this country.
-
-Provide your response strictly in the following format:
-Restaurant Name: <Name of the Restaurant>
-Best Suited City: <Best Suited City in {country}>
-Ideal Ambiance & Vibe: <Detailed Ambiance & Atmosphere Description>
-Cuisine Specialty & Theme: <Specialty & Culinary Focus>
-Target Audience: <Target Customer Base>`
-  );
-
-  // Chain 2: Recommend 4 Dishes with Dietary Types based on Chain 1 output
-  const dishPrompt = PromptTemplate.fromTemplate(
-    `You are a world-class executive chef. Based on this restaurant concept in {country}:
-
-{restaurant_info}
-
-Curate 4 recommended dishes (Starter, Main Course, Dessert, Beverage) that should be added to this restaurant's menu.
-Ensure you include dietary tags (Vegan, Vegetarian, Non-Vegetarian, or Eggitarian) for each dish.
-
-Provide your response strictly in the following format:
-
-Dish 1: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 2: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 3: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 4: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>`
-  );
-
-  const parser = new StringOutputParser();
-
-  // Execute Chain 1
-  const chain1 = restaurantPrompt.pipe(llm).pipe(parser);
-  const restaurantResult = await chain1.invoke({ country });
-
-  // Execute Chain 2 with Chain 1 output
-  const chain2 = dishPrompt.pipe(llm).pipe(parser);
-  const dishesResult = await chain2.invoke({
-    country,
-    restaurant_info: restaurantResult,
-  });
-
-  return { restaurantResult, dishesResult };
-}
 
 // Backroad Server-Driven UI (Node.js equivalent to Streamlit)
 run(
   async (br) => {
     // Environment Resolution Flow: Local .env -> Monorepo Root .env
     const envApiKey = process.env.AI_API_KEY || process.env.GOOGLE_API_KEY || '';
-    const aiModel = process.env.AI_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const aiProvider = process.env.AI_PROVIDER || 'google';
+    const aiModel = process.env.AI_MODEL || process.env.GEMINI_MODEL || DEFAULT_AI_MODEL;
+    const aiProvider = process.env.AI_PROVIDER || DEFAULT_AI_PROVIDER;
 
     br.write({ body: '# LangChain JS Cuisine Explorer' });
     br.write({
@@ -152,28 +95,17 @@ run(
     }
 
     // User Inputs: Country Dropdown & Optional Custom Input
-    const countryOptions = [
-      { label: "Italy", value: "Italy" },
-      { label: "India", value: "India" },
-      { label: "Japan", value: "Japan" },
-      { label: "Mexico", value: "Mexico" },
-      { label: "France", value: "France" },
-      { label: "Thailand", value: "Thailand" },
-      { label: "Spain", value: "Spain" },
-      { label: "Greece", value: "Greece" },
-      { label: "Custom", value: "Custom" },
-    ];
     const selectedCountryOption = br.select({
       label: 'Select a Country',
-      options: countryOptions,
-      defaultValue: 'Japan',
+      options: COUNTRY_OPTIONS,
+      defaultValue: DEFAULT_COUNTRY,
     });
 
     let country = selectedCountryOption;
-    if (selectedCountryOption === 'Custom') {
+    if (selectedCountryOption === CUSTOM_COUNTRY_OPTION) {
       country = br.textInput({
         label: 'Enter Custom Country Name',
-        defaultValue: 'Brazil',
+        defaultValue: DEFAULT_CUSTOM_COUNTRY,
       });
     }
 
@@ -211,57 +143,12 @@ run(
         const parser = new StringOutputParser();
 
         // Chain 1 Prompts & Execution
-        const restaurantPrompt = PromptTemplate.fromTemplate(
-          `You are an expert culinary concept strategist and restaurateur.
-Given the country "{country}", generate a unique or iconic restaurant concept suited for this country.
-
-Provide your response strictly in the following format:
-Restaurant Name: <Name of the Restaurant>
-Best Suited City: <Best Suited City in {country}>
-Ideal Ambiance & Vibe: <Detailed Ambiance & Atmosphere Description>
-Cuisine Specialty & Theme: <Specialty & Culinary Focus>
-Target Audience: <Target Customer Base>`
-        );
-
+        const restaurantPrompt = PromptTemplate.fromTemplate(RESTAURANT_PROMPT_TEMPLATE);
         const chain1 = restaurantPrompt.pipe(llm).pipe(parser);
         const restaurantResult = await chain1.invoke({ country });
 
         // Chain 2 Prompts & Execution
-        const dishPrompt = PromptTemplate.fromTemplate(
-          `You are a world-class executive chef. Based on this restaurant concept in {country}:
-
-{restaurant_info}
-
-Curate 4 recommended dishes (Starter, Main Course, Dessert, Beverage) that should be added to this restaurant's menu.
-Ensure you include dietary tags (Vegan, Vegetarian, Non-Vegetarian, or Eggitarian) for each dish.
-
-Provide your response strictly in the following format:
-
-Dish 1: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 2: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 3: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 4: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>`
-        );
-
+        const dishPrompt = PromptTemplate.fromTemplate(DISH_PROMPT_TEMPLATE);
         const chain2 = dishPrompt.pipe(llm).pipe(parser);
         const dishesResult = await chain2.invoke({
           country,
@@ -310,7 +197,7 @@ Key Ingredients: <List of proper ingredients>`
   },
   {
     server: {
-      port: process.env.PORT ? parseInt(process.env.PORT, 10) : 7860,
+      port: process.env.PORT ? parseInt(process.env.PORT, 10) : DEFAULT_SERVER_PORT,
     },
   }
 );

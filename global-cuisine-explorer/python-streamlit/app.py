@@ -11,6 +11,20 @@ try:
 except ImportError:
     HAS_OPENAI = False
 
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from constants.cuisine_constants import (
+    COUNTRY_OPTIONS,
+    CUSTOM_COUNTRY_OPTION,
+    DEFAULT_CUSTOM_COUNTRY,
+    DEFAULT_AI_PROVIDER,
+    DEFAULT_AI_MODEL,
+    GROQ_BASE_URL,
+    RESTAURANT_PROMPT_TEMPLATE,
+    DISH_PROMPT_TEMPLATE,
+)
+
 # Load environment variables from local .env AND root monorepo .env
 load_dotenv()
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
@@ -65,8 +79,8 @@ st.markdown("""
 
 # Retrieve generic environment configurations
 env_api_key = os.getenv("AI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
-ai_model = os.getenv("AI_MODEL", "").strip() or os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
-ai_provider = os.getenv("AI_PROVIDER", "google").strip().lower()
+ai_model = os.getenv("AI_MODEL", "").strip() or os.getenv("GEMINI_MODEL", DEFAULT_AI_MODEL).strip()
+ai_provider = os.getenv("AI_PROVIDER", DEFAULT_AI_PROVIDER).strip().lower()
 
 # Sidebar Configuration (Generic AI Provider Setup)
 st.sidebar.title("AI Configuration")
@@ -105,11 +119,10 @@ st.markdown('<div class="main-header">LangChain Cuisine Explorer</div>', unsafe_
 st.markdown('<div class="sub-header">Powered by LangChain Sequential Chains and Multi-LLM Provider Architecture</div>', unsafe_allow_html=True)
 
 # User Input
-country_options = ["Italy", "India", "Japan", "Mexico", "France", "Thailand", "Spain", "Greece", "Custom"]
-selected_country_option = st.selectbox("Select a Country", country_options)
+selected_country_option = st.selectbox("Select a Country", COUNTRY_OPTIONS)
 
-if selected_country_option == "Custom":
-    country = st.text_input("Enter any Country Name", "Brazil")
+if selected_country_option == CUSTOM_COUNTRY_OPTION:
+    country = st.text_input("Enter any Country Name", DEFAULT_CUSTOM_COUNTRY)
 else:
     country = selected_country_option
 
@@ -125,7 +138,7 @@ def get_llm_instance(provider: str, model: str, key: str):
     """
     Factory function to instantiate the LLM based on provider configuration.
     """
-    p = (provider or "google").lower()
+    p = (provider or DEFAULT_AI_PROVIDER).lower()
     if p == "groq":
         try:
             from langchain_groq import ChatGroq
@@ -135,7 +148,7 @@ def get_llm_instance(provider: str, model: str, key: str):
                 return ChatOpenAI(
                     model_name=model,
                     openai_api_key=key,
-                    openai_api_base="https://api.groq.com/openai/v1",
+                    openai_api_base=GROQ_BASE_URL,
                     temperature=0.7
                 )
             else:
@@ -167,16 +180,7 @@ if st.button("Explore Cuisine & Generate Menu with LangChain", type="primary"):
                 status_box.write("Step 1/2: Executing Chain 1 (Restaurant Concept, Suited City & Ambiance)...")
                 restaurant_prompt = PromptTemplate(
                     input_variables=["country"],
-                    template="""You are an expert culinary concept strategist and restaurateur.
-Given the country "{country}", generate a unique or iconic restaurant concept suited for this country.
-
-Provide your response strictly in the following format:
-Restaurant Name: <Name of the Restaurant>
-Best Suited City: <Best Suited City in {country}>
-Ideal Ambiance & Vibe: <Detailed Ambiance & Atmosphere Description>
-Cuisine Specialty & Theme: <Specialty & Culinary Focus>
-Target Audience: <Target Customer Base>
-"""
+                    template=RESTAURANT_PROMPT_TEMPLATE
                 )
                 chain1 = restaurant_prompt | llm | StrOutputParser()
                 restaurant_out = chain1.invoke({"country": country})
@@ -186,39 +190,7 @@ Target Audience: <Target Customer Base>
                 status_box.write("Step 2/2: Executing Chain 2 (Curating 4 Dishes with Dietary Types)...")
                 dish_prompt = PromptTemplate(
                     input_variables=["country", "restaurant_info"],
-                    template="""You are a world-class executive chef. Based on this restaurant concept in {country}:
-
-{restaurant_info}
-
-Curate 4 recommended dishes (Starter, Main Course, Dessert, Beverage) that should be added to this restaurant's menu.
-Ensure you include dietary tags (Vegan, Vegetarian, Non-Vegetarian, or Eggitarian) for each dish.
-
-Provide your response strictly in the following format:
-
-Dish 1: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 2: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 3: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-
-Dish 4: <Dish Name>
-Dietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>
-Category: <Starter / Main Course / Dessert / Beverage>
-Description: <2-3 sentences description>
-Key Ingredients: <List of proper ingredients>
-"""
+                    template=DISH_PROMPT_TEMPLATE
                 )
                 chain2 = dish_prompt | llm | StrOutputParser()
                 dishes_out = chain2.invoke({"country": country, "restaurant_info": restaurant_out})

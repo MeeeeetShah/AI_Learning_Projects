@@ -1,0 +1,24 @@
+{
+  "COUNTRY_OPTIONS": [
+    "Italy",
+    "India",
+    "Japan",
+    "Mexico",
+    "France",
+    "Thailand",
+    "Spain",
+    "Greece",
+    "Custom"
+  ],
+  "CUSTOM_COUNTRY_OPTION": "Custom",
+  "DEFAULT_COUNTRY": "Japan",
+  "DEFAULT_CUSTOM_COUNTRY": "Brazil",
+  "DEFAULT_AI_PROVIDER": "google",
+  "DEFAULT_AI_MODEL": "gemini-2.5-flash",
+  "DEFAULT_GROQ_MODEL": "groq/compound-mini",
+  "DEFAULT_OPENAI_MODEL": "gpt-4o-mini",
+  "GROQ_BASE_URL": "https://api.groq.com/openai/v1",
+  "DEFAULT_SERVER_PORT": 7860,
+  "RESTAURANT_PROMPT_TEMPLATE": "You are an expert culinary concept strategist and restaurateur.\nGiven the country \"{country}\", generate a unique or iconic restaurant concept suited for this country.\n\nProvide your response strictly in the following format:\nRestaurant Name: <Name of the Restaurant>\nBest Suited City: <Best Suited City in {country}>\nIdeal Ambiance & Vibe: <Detailed Ambiance & Atmosphere Description>\nCuisine Specialty & Theme: <Specialty & Culinary Focus>\nTarget Audience: <Target Customer Base>\n",
+  "DISH_PROMPT_TEMPLATE": "You are a world-class executive chef. Based on this restaurant concept in {country}:\n\n{restaurant_info}\n\nCurate 4 recommended dishes (Starter, Main Course, Dessert, Beverage) that should be added to this restaurant's menu.\nEnsure you include dietary tags (Vegan, Vegetarian, Non-Vegetarian, or Eggitarian) for each dish.\n\nProvide your response strictly in the following format:\n\nDish 1: <Dish Name>\nDietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>\nCategory: <Starter / Main Course / Dessert / Beverage>\nDescription: <2-3 sentences description>\nKey Ingredients: <List of proper ingredients>\n\nDish 2: <Dish Name>\nDietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>\nCategory: <Starter / Main Course / Dessert / Beverage>\nDescription: <2-3 sentences description>\nKey Ingredients: <List of proper ingredients>\n\nDish 3: <Dish Name>\nDietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>\nCategory: <Starter / Main Course / Dessert / Beverage>\nDescription: <2-3 sentences description>\nKey Ingredients: <List of proper ingredients>\n\nDish 4: <Dish Name>\nDietary Tag: <Vegan / Vegetarian / Non-Vegetarian / Eggitarian>\nCategory: <Starter / Main Course / Dessert / Beverage>\nDescription: <2-3 sentences description>\nKey Ingredients: <List of proper ingredients>\n"
+}
